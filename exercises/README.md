@@ -1,238 +1,88 @@
-# Milestone Projects
+# Exercises
 
-Build real things. Don't just read - code.
+Hands-on practice for each section. Structure:
 
-## Month 1-2: CLI Tool
-
-**Build a concurrent file processor.**
-
-Requirements:
-- Accept directory path as argument
-- Find all files matching a pattern
-- Process each file in parallel
-- Aggregate results
-- Show progress
-
-```bash
-./processor --pattern "*.log" --dir /var/log --workers 4
+```
+exercises/
+  01-elixir-core/
+    01-pattern-matching.ex    # Your solutions
+    02-data-types.ex
+    ...
+  solutions/                   # Reference solutions (don't peek!)
+    01-pattern-matching.ex
+    ...
+  projects/                    # Milestone projects
+    01-cli-tool/
+    02-chat-server/
+    ...
 ```
 
-Skills practiced:
-- Pattern matching
-- Recursion
-- Task async/await
-- File IO
-- CLI argument parsing (OptionParser)
+## Workflow
 
----
+1. Read the docs in the main section (e.g., `01-elixir-core/01-pattern-matching.md`)
+2. Create your solution file in exercises (e.g., `exercises/01-elixir-core/01-pattern-matching.ex`)
+3. Run with `elixir exercises/01-elixir-core/01-pattern-matching.ex` or in `iex`
+4. Use `/elixir-review exercises/01-elixir-core/01-pattern-matching.ex` for feedback
+5. Compare to solution only after attempting
 
-## Month 3: Chat Server
+## Progress Tracking
 
-**Build a terminal chat room with fault tolerance.**
+Use git to track your progress:
 
-Requirements:
-- Multiple clients connect via TCP
-- Rooms with join/leave
-- Private messages
-- User list
-- Survives client crashes
-- Persists message history
+```bash
+# After completing an exercise
+git add exercises/01-elixir-core/01-pattern-matching.ex
+git commit -m "complete: pattern matching exercises"
+```
 
-Skills practiced:
-- GenServer
-- Supervisor trees
-- Process registry
-- TCP sockets (`:gen_tcp`)
-- Binary protocols
+## Testing Your Solutions
 
----
+Each exercise file should be runnable:
 
-## Month 4: REST API
+```elixir
+# exercises/01-elixir-core/01-pattern-matching.ex
 
-**Build a blog API with authentication.**
+defmodule PatternMatching.Exercise1 do
+  # Your solution here
+end
 
-Requirements:
-- User registration/login (JWT)
-- CRUD for posts
-- Comments with nesting
-- Tags (many-to-many)
-- Pagination
-- Rate limiting
+# Test it
+IO.inspect PatternMatching.Exercise1.some_function([1, 2, 3])
+```
 
-Skills practiced:
-- Phoenix controllers
-- Ecto schemas & queries
-- Changesets & validation
-- Plugs (auth middleware)
-- JSON serialization
+Or use ExUnit:
 
----
+```elixir
+ExUnit.start()
 
-## Month 5: Multi-tenant SaaS
+defmodule PatternMatchingTest do
+  use ExUnit.Case
 
-**Add multi-tenancy to the blog.**
+  test "exercise 1" do
+    assert PatternMatching.Exercise1.classify([]) == :empty
+    assert PatternMatching.Exercise1.classify([1]) == :single
+  end
+end
+```
 
-Requirements:
-- Organizations with members
-- Tenant isolation at database level
-- Role-based permissions
-- Subdomain routing
-- Billing integration (mock)
+## Exercise Difficulty
 
-Skills practiced:
-- Complex Ecto queries
-- Database constraints
-- Context design
-- Middleware patterns
+Each section's exercises are ordered by difficulty:
+- **1-2**: Warm-up, direct application of concepts
+- **3-4**: Intermediate, combining multiple concepts
+- **5+**: Challenging, requires deeper understanding
 
----
+## Getting Feedback
 
-## Month 6: Real-time Dashboard
+Use the Claude command for deep code review:
 
-**Build a LiveView monitoring dashboard.**
+```
+/elixir-review exercises/01-elixir-core/01-pattern-matching.ex
+```
 
-Requirements:
-- Real-time metrics (CPU, memory, processes)
-- Interactive charts (JS hooks)
-- Alert configuration
-- Historical data
-- Multi-user with presence
-
-Skills practiced:
-- LiveView lifecycle
-- Streams for performance
-- JS interop
-- PubSub
-- Telemetry
-
----
-
-## Month 7: Multiplayer Game
-
-**Build a real-time multiplayer game.**
-
-Ideas:
-- Tic-tac-toe
-- Chess
-- Card game
-- Trivia
-
-Requirements:
-- Matchmaking
-- Game state sync
-- Turn management
-- Spectator mode
-- Leaderboard
-
-Skills practiced:
-- Phoenix Channels
-- Presence
-- Game state machines
-- Concurrency patterns
-
----
-
-## Month 8: Production Deployment
-
-**Deploy your app properly.**
-
-Requirements:
-- Docker container
-- Kubernetes or Fly.io
-- Clustering (multiple nodes)
-- Database migrations
-- Health checks
-- Logging & metrics (Prometheus)
-- CI/CD pipeline
-
-Skills practiced:
-- Releases (`mix release`)
-- Runtime configuration
-- Distributed Elixir
-- Monitoring
-
----
-
-## Month 9-10: Distributed Cache
-
-**Build a distributed cache like Redis.**
-
-Requirements:
-- Key-value storage
-- TTL support
-- Pub/Sub
-- Clustering (partition data across nodes)
-- Replication for fault tolerance
-- CLI client
-
-Skills practiced:
-- ETS
-- Distributed Erlang
-- Consistent hashing
-- CAP tradeoffs
-- Network protocols
-
----
-
-## Month 11: Job Queue
-
-**Build a background job processor.**
-
-Requirements:
-- Enqueue jobs with arguments
-- Priority queues
-- Scheduled jobs
-- Retries with backoff
-- Dead letter queue
-- Web UI for monitoring
-- Persistence
-
-Skills practiced:
-- GenStage/Flow
-- Database-backed queues
-- Supervision strategies
-- Failure handling
-
----
-
-## Month 12: Your Framework
-
-**Build a minimal web framework or DSL.**
-
-Ideas:
-- Micro web framework (like Sinatra)
-- GraphQL library
-- State machine DSL
-- Testing framework
-- Form validation library
-
-Requirements:
-- Clean API
-- Documentation
-- Tests
-- Published to Hex.pm
-
-Skills practiced:
-- Metaprogramming
-- Library design
-- Documentation (ExDoc)
-- Publishing packages
-
----
-
-## How to Approach Projects
-
-1. **Start simple** - Get something working first
-2. **Add complexity gradually** - Don't over-engineer upfront
-3. **Test as you go** - Not just at the end
-4. **Read source code** - See how Phoenix/Ecto do it
-5. **Break things** - Kill processes, drop connections, corrupt data
-6. **Refactor** - Your first design won't be your best
-
-## Resources
-
-- [Elixir Forum](https://elixirforum.com) - Best community
-- [ElixirSchool](https://elixirschool.com) - Tutorials
-- [HexDocs](https://hexdocs.pm) - Documentation
-- [Elixir Radar](https://elixir-radar.com) - Newsletter
-- [Thinking Elixir Podcast](https://thinkingelixir.com)
+This gives you:
+- Correctness check
+- Idiomatic Elixir feedback
+- Performance considerations
+- Best practices
+- Suggestions for improvement
