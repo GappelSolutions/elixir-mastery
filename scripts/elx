@@ -1,0 +1,344 @@
+#!/usr/bin/env bash
+# Elixir Learning CLI - Track progress, run tests, get feedback
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+STATE_FILE="$PROJECT_DIR/.elx-state"
+SECTIONS=(
+  "01-elixir-core"
+  "02-otp"
+  "03-phoenix"
+  "04-ecto"
+  "05-liveview"
+  "06-channels"
+  "07-testing"
+  "08-deployment"
+  "09-advanced"
+  "10-metaprogramming"
+)
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Load state
+load_state() {
+  if [[ -f "$STATE_FILE" ]]; then
+    source "$STATE_FILE"
+  else
+    CURRENT_SECTION="01-elixir-core"
+    CURRENT_EXERCISE="01-pattern-matching"
+    save_state
+  fi
+}
+
+save_state() {
+  echo "CURRENT_SECTION=\"$CURRENT_SECTION\"" > "$STATE_FILE"
+  echo "CURRENT_EXERCISE=\"$CURRENT_EXERCISE\"" >> "$STATE_FILE"
+}
+
+# Get exercises for a section
+get_exercises() {
+  local section=$1
+  local exercise_dir="$PROJECT_DIR/exercises/$section"
+  if [[ -d "$exercise_dir" ]]; then
+    ls "$exercise_dir"/*.ex 2>/dev/null | xargs -n1 basename | sed 's/.ex$//' | sort
+  fi
+}
+
+# Get docs for a section
+get_docs() {
+  local section=$1
+  local docs_dir="$PROJECT_DIR/$section"
+  if [[ -d "$docs_dir" ]]; then
+    ls "$docs_dir"/*.md 2>/dev/null | xargs -n1 basename | sort
+  fi
+}
+
+# Display status
+show_status() {
+  clear
+  echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}${CYAN}║     ELIXIR MASTERY - Learning CLI        ║${NC}"
+  echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════╝${NC}"
+  echo ""
+  echo -e "${BOLD}Current Section:${NC}  ${YELLOW}$CURRENT_SECTION${NC}"
+  echo -e "${BOLD}Current Exercise:${NC} ${YELLOW}$CURRENT_EXERCISE${NC}"
+  echo ""
+
+  # Show progress
+  local exercise_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_EXERCISE.ex"
+  if [[ -f "$exercise_file" ]]; then
+    local todos=$(grep -c ":todo" "$exercise_file" 2>/dev/null || echo "0")
+    if [[ "$todos" -eq 0 ]]; then
+      echo -e "${GREEN}✓ All exercises implemented${NC}"
+    else
+      echo -e "${YELLOW}○ $todos exercises remaining${NC}"
+    fi
+  fi
+  echo ""
+  echo -e "${BOLD}─────────────────────────────────────────────${NC}"
+}
+
+# Menu
+show_menu() {
+  echo ""
+  echo -e "${BOLD}Commands:${NC}"
+  echo -e "  ${CYAN}t${NC} - Run tests"
+  echo -e "  ${CYAN}f${NC} - Get feedback (/elixir-review)"
+  echo -e "  ${CYAN}d${NC} - Open docs in nvim"
+  echo -e "  ${CYAN}e${NC} - Open exercise in nvim"
+  echo -e "  ${CYAN}s${NC} - View solution"
+  echo -e "  ${CYAN}c${NC} - Commit progress"
+  echo -e "  ${CYAN}n${NC} - Next exercise"
+  echo -e "  ${CYAN}p${NC} - Previous exercise"
+  echo -e "  ${CYAN}j${NC} - Jump to section"
+  echo -e "  ${CYAN}l${NC} - List all exercises"
+  echo -e "  ${CYAN}q${NC} - Quit"
+  echo ""
+  echo -ne "${BOLD}> ${NC}"
+}
+
+# Run tests
+run_tests() {
+  local exercise_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_EXERCISE.ex"
+  if [[ -f "$exercise_file" ]]; then
+    echo -e "${CYAN}Running tests...${NC}"
+    echo ""
+    elixir "$exercise_file"
+  else
+    echo -e "${RED}No exercise file found: $exercise_file${NC}"
+  fi
+  echo ""
+  read -p "Press Enter to continue..."
+}
+
+# Get feedback
+get_feedback() {
+  local exercise_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_EXERCISE.ex"
+  if [[ -f "$exercise_file" ]]; then
+    echo -e "${CYAN}Opening Claude for feedback...${NC}"
+    echo -e "${YELLOW}Run in agent tab: /elixir-review $exercise_file${NC}"
+    echo ""
+    echo "$exercise_file" | pbcopy
+    echo -e "${GREEN}Path copied to clipboard${NC}"
+  else
+    echo -e "${RED}No exercise file found${NC}"
+  fi
+  read -p "Press Enter to continue..."
+}
+
+# Open docs
+open_docs() {
+  local readme="$PROJECT_DIR/$CURRENT_SECTION/README.md"
+  local doc_file="$PROJECT_DIR/$CURRENT_SECTION/$CURRENT_EXERCISE.md"
+
+  if [[ -f "$doc_file" ]]; then
+    nvim "$doc_file"
+  elif [[ -f "$readme" ]]; then
+    nvim "$readme"
+  else
+    echo -e "${RED}No docs found for $CURRENT_SECTION${NC}"
+    read -p "Press Enter to continue..."
+  fi
+}
+
+# Open exercise
+open_exercise() {
+  local exercise_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_EXERCISE.ex"
+  if [[ -f "$exercise_file" ]]; then
+    nvim "$exercise_file"
+  else
+    echo -e "${RED}No exercise file: $exercise_file${NC}"
+    echo -e "${YELLOW}Create it to start working on this exercise${NC}"
+    read -p "Press Enter to continue..."
+  fi
+}
+
+# View solution
+view_solution() {
+  local solution_file="$PROJECT_DIR/exercises/solutions/$CURRENT_EXERCISE.ex"
+  if [[ -f "$solution_file" ]]; then
+    echo -e "${YELLOW}⚠ Are you sure? Try solving it yourself first!${NC}"
+    read -p "View solution? (y/N) " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      nvim -R "$solution_file"
+    fi
+  else
+    echo -e "${YELLOW}No solution file available yet${NC}"
+    read -p "Press Enter to continue..."
+  fi
+}
+
+# Commit progress
+commit_progress() {
+  cd "$PROJECT_DIR"
+  local exercise_file="exercises/$CURRENT_SECTION/$CURRENT_EXERCISE.ex"
+
+  if git diff --quiet "$exercise_file" 2>/dev/null; then
+    echo -e "${YELLOW}No changes to commit${NC}"
+  else
+    git add "$exercise_file"
+    git commit -m "complete: $CURRENT_SECTION/$CURRENT_EXERCISE"
+    echo -e "${GREEN}✓ Committed!${NC}"
+  fi
+  read -p "Press Enter to continue..."
+}
+
+# Navigate exercises
+next_exercise() {
+  local exercises=($(get_exercises "$CURRENT_SECTION"))
+  local current_idx=0
+
+  for i in "${!exercises[@]}"; do
+    if [[ "${exercises[$i]}" == "$CURRENT_EXERCISE" ]]; then
+      current_idx=$i
+      break
+    fi
+  done
+
+  local next_idx=$((current_idx + 1))
+  if [[ $next_idx -lt ${#exercises[@]} ]]; then
+    CURRENT_EXERCISE="${exercises[$next_idx]}"
+    save_state
+  else
+    echo -e "${YELLOW}Last exercise in section. Jump to next section?${NC}"
+    read -p "(y/N) " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      next_section
+    fi
+  fi
+}
+
+prev_exercise() {
+  local exercises=($(get_exercises "$CURRENT_SECTION"))
+  local current_idx=0
+
+  for i in "${!exercises[@]}"; do
+    if [[ "${exercises[$i]}" == "$CURRENT_EXERCISE" ]]; then
+      current_idx=$i
+      break
+    fi
+  done
+
+  if [[ $current_idx -gt 0 ]]; then
+    CURRENT_EXERCISE="${exercises[$((current_idx - 1))]}"
+    save_state
+  fi
+}
+
+next_section() {
+  local current_idx=0
+  for i in "${!SECTIONS[@]}"; do
+    if [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]]; then
+      current_idx=$i
+      break
+    fi
+  done
+
+  local next_idx=$((current_idx + 1))
+  if [[ $next_idx -lt ${#SECTIONS[@]} ]]; then
+    CURRENT_SECTION="${SECTIONS[$next_idx]}"
+    local exercises=($(get_exercises "$CURRENT_SECTION"))
+    CURRENT_EXERCISE="${exercises[0]:-README}"
+    save_state
+  fi
+}
+
+# Jump to section
+jump_section() {
+  echo ""
+  echo -e "${BOLD}Sections:${NC}"
+  for i in "${!SECTIONS[@]}"; do
+    local mark=" "
+    [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && mark=">"
+    echo -e "  ${CYAN}$((i+1))${NC} $mark ${SECTIONS[$i]}"
+  done
+  echo ""
+  read -p "Select section (1-${#SECTIONS[@]}): " choice
+
+  if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#SECTIONS[@]} ]]; then
+    CURRENT_SECTION="${SECTIONS[$((choice-1))]}"
+    local exercises=($(get_exercises "$CURRENT_SECTION"))
+    if [[ ${#exercises[@]} -gt 0 ]]; then
+      echo ""
+      echo -e "${BOLD}Exercises:${NC}"
+      for i in "${!exercises[@]}"; do
+        echo -e "  ${CYAN}$((i+1))${NC} ${exercises[$i]}"
+      done
+      echo ""
+      read -p "Select exercise (1-${#exercises[@]}): " ex_choice
+      if [[ "$ex_choice" =~ ^[0-9]+$ ]] && [[ $ex_choice -ge 1 ]] && [[ $ex_choice -le ${#exercises[@]} ]]; then
+        CURRENT_EXERCISE="${exercises[$((ex_choice-1))]}"
+      fi
+    fi
+    save_state
+  fi
+}
+
+# List exercises
+list_exercises() {
+  echo ""
+  echo -e "${BOLD}All Exercises:${NC}"
+  for section in "${SECTIONS[@]}"; do
+    local exercises=($(get_exercises "$section"))
+    if [[ ${#exercises[@]} -gt 0 ]]; then
+      echo -e "\n${CYAN}$section${NC}"
+      for ex in "${exercises[@]}"; do
+        local file="$PROJECT_DIR/exercises/$section/$ex.ex"
+        local status="○"
+        if [[ -f "$file" ]]; then
+          local todos=$(grep -c ":todo" "$file" 2>/dev/null || echo "0")
+          [[ "$todos" -eq 0 ]] && status="${GREEN}✓${NC}" || status="${YELLOW}◐${NC}"
+        fi
+        local mark=" "
+        [[ "$section" == "$CURRENT_SECTION" && "$ex" == "$CURRENT_EXERCISE" ]] && mark=">"
+        echo -e "  $status $mark $ex"
+      done
+    fi
+  done
+  echo ""
+  read -p "Press Enter to continue..."
+}
+
+# Main loop
+main() {
+  load_state
+
+  while true; do
+    show_status
+    show_menu
+    read -n1 cmd
+    echo ""
+
+    case $cmd in
+      t) run_tests ;;
+      f) get_feedback ;;
+      d) open_docs ;;
+      e) open_exercise ;;
+      s) view_solution ;;
+      c) commit_progress ;;
+      n) next_exercise ;;
+      p) prev_exercise ;;
+      j) jump_section ;;
+      l) list_exercises ;;
+      q) echo "Happy learning!"; exit 0 ;;
+      *) ;;
+    esac
+  done
+}
+
+# Handle direct commands
+case "${1:-}" in
+  test) load_state; run_tests ;;
+  feedback) load_state; get_feedback ;;
+  status) load_state; show_status ;;
+  *) main ;;
+esac
