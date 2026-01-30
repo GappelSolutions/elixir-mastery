@@ -117,7 +117,7 @@ run_tests() {
     echo -e "${RED}No exercise file found: $exercise_file${NC}"
   fi
   echo ""
-  read -p "Press Enter to continue..."
+  read -n1 -s -p "Press any key..."
 }
 
 # Get feedback
@@ -132,7 +132,7 @@ get_feedback() {
   else
     echo -e "${RED}No exercise file found${NC}"
   fi
-  read -p "Press Enter to continue..."
+  read -n1 -s -p "Press any key..."
 }
 
 # Open docs
@@ -146,7 +146,7 @@ open_docs() {
     nvim "$readme"
   else
     echo -e "${RED}No docs found for $CURRENT_SECTION${NC}"
-    read -p "Press Enter to continue..."
+    read -n1 -s -p "Press any key..."
   fi
 }
 
@@ -158,7 +158,7 @@ open_exercise() {
   else
     echo -e "${RED}No exercise file: $exercise_file${NC}"
     echo -e "${YELLOW}Create it to start working on this exercise${NC}"
-    read -p "Press Enter to continue..."
+    read -n1 -s -p "Press any key..."
   fi
 }
 
@@ -166,14 +166,13 @@ open_exercise() {
 view_solution() {
   local solution_file="$PROJECT_DIR/exercises/solutions/$CURRENT_EXERCISE.ex"
   if [[ -f "$solution_file" ]]; then
-    echo -e "${YELLOW}⚠ Are you sure? Try solving it yourself first!${NC}"
-    read -p "View solution? (y/N) " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      nvim -R "$solution_file"
-    fi
+    echo -e "${YELLOW}⚠ Try solving it yourself first! View solution? (y/N)${NC}"
+    read -n1 confirm
+    echo ""
+    [[ "$confirm" =~ ^[Yy]$ ]] && nvim -R "$solution_file"
   else
     echo -e "${YELLOW}No solution file available yet${NC}"
-    read -p "Press Enter to continue..."
+    sleep 1
   fi
 }
 
@@ -189,7 +188,7 @@ commit_progress() {
     git commit -m "complete: $CURRENT_SECTION/$CURRENT_EXERCISE"
     echo -e "${GREEN}✓ Committed!${NC}"
   fi
-  read -p "Press Enter to continue..."
+  read -n1 -s -p "Press any key..."
 }
 
 # Navigate exercises
@@ -209,11 +208,10 @@ next_exercise() {
     CURRENT_EXERCISE="${exercises[$next_idx]}"
     save_state
   else
-    echo -e "${YELLOW}Last exercise in section. Jump to next section?${NC}"
-    read -p "(y/N) " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      next_section
-    fi
+    echo -e "${YELLOW}Last exercise in section. Jump to next section? (y/N)${NC}"
+    read -n1 confirm
+    echo ""
+    [[ "$confirm" =~ ^[Yy]$ ]] && next_section
   fi
 }
 
@@ -305,7 +303,7 @@ list_exercises() {
     fi
   done
   echo ""
-  read -p "Press Enter to continue..."
+  read -n1 -s -p "Press any key..."
 }
 
 # Main loop
