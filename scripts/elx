@@ -331,12 +331,9 @@ navigate() {
     CURRENT_ITEM="${new_item#*:}"
     save_state
   elif [[ "$direction" == "next" && $new_idx -ge $num_items ]]; then
-    echo -e "${YELLOW}Section complete! Next section? (y/N)${NC}"
-    read -n1 confirm
-    echo ""
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      next_section
-    fi
+    next_section
+  elif [[ "$direction" == "prev" && $new_idx -lt 0 ]]; then
+    prev_section
   fi
 }
 
@@ -359,6 +356,31 @@ next_section() {
       local first="${items[0]}"
       CURRENT_TYPE="${first%%:*}"
       CURRENT_ITEM="${first#*:}"
+    fi
+    save_state
+  fi
+}
+
+prev_section() {
+  local current_idx=0
+  for i in "${!SECTIONS[@]}"; do
+    if [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]]; then
+      current_idx=$i
+      break
+    fi
+  done
+
+  local prev_idx=$((current_idx - 1))
+  if [[ $prev_idx -ge 0 ]]; then
+    CURRENT_SECTION="${SECTIONS[$prev_idx]}"
+    local items_str
+    items_str=$(get_items "$CURRENT_SECTION")
+    local -a items=($items_str)
+    if [[ ${#items[@]} -gt 0 ]]; then
+      # Go to last item in previous section
+      local last="${items[-1]}"
+      CURRENT_TYPE="${last%%:*}"
+      CURRENT_ITEM="${last#*:}"
     fi
     save_state
   fi
