@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Elixir Learning CLI - Track progress through docs AND exercises
+# Elixir Learning CLI - Track progress through topics
 
-# Don't exit on error - we handle errors gracefully
 set +e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,33 +25,49 @@ SECTIONS=(
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-# Load state
 load_state() {
   if [[ -f "$STATE_FILE" ]]; then
     source "$STATE_FILE"
   else
     CURRENT_SECTION="01-elixir-core"
-    CURRENT_ITEM="01-pattern-matching"
-    CURRENT_TYPE="doc"  # doc or exercise
+    CURRENT_TOPIC="01-pattern-matching"
     save_state
   fi
-
-  # Initialize progress file if needed
   [[ ! -f "$PROGRESS_FILE" ]] && init_progress_file
 }
 
 save_state() {
-  cat > "$STATE_FILE" << EOF
-CURRENT_SECTION="$CURRENT_SECTION"
-CURRENT_ITEM="$CURRENT_ITEM"
-CURRENT_TYPE="$CURRENT_TYPE"
-EOF
+  echo "CURRENT_SECTION=\"$CURRENT_SECTION\"" > "$STATE_FILE"
+  echo "CURRENT_TOPIC=\"$CURRENT_TOPIC\"" >> "$STATE_FILE"
+}
+
+# Get all topics for a section
+get_topics() {
+  local section=$1
+  local docs_dir="$PROJECT_DIR/$section"
+  local ex_dir="$PROJECT_DIR/exercises/$section"
+  local all_names=""
+
+  if [[ -d "$docs_dir" ]]; then
+    for f in "$docs_dir"/*.md; do
+      [[ -e "$f" ]] || continue
+      all_names="$all_names $(basename "$f" .md)"
+    done
+  fi
+
+  if [[ -d "$ex_dir" ]]; then
+    for f in "$ex_dir"/*.ex; do
+      [[ -e "$f" ]] || continue
+      all_names="$all_names $(basename "$f" .ex)"
+    done
+  fi
+
+  echo "$all_names" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' '
 }
 
 init_progress_file() {
@@ -67,118 +82,34 @@ EOF
     echo "## $section" >> "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
 
-    local docs_dir="$PROJECT_DIR/$section"
-    local ex_dir="$PROJECT_DIR/exercises/$section"
-    local all_names=""
-
-    # Collect all names
-    if [[ -d "$docs_dir" ]]; then
-      for f in "$docs_dir"/*.md; do
-        [[ -e "$f" ]] || continue
-        local name=$(basename "$f" .md)
-        all_names="$all_names $name"
-      done
-    fi
-
-    if [[ -d "$ex_dir" ]]; then
-      for f in "$ex_dir"/*.ex; do
-        [[ -e "$f" ]] || continue
-        local name=$(basename "$f" .ex)
-        all_names="$all_names $name"
-      done
-    fi
-
-    # Sort unique and interleave
-    local sorted_names=$(echo "$all_names" | tr ' ' '\n' | grep -v '^$' | sort -u)
-    for name in $sorted_names; do
-      [[ -f "$docs_dir/$name.md" ]] && echo "- [ ] 📖 $name" >> "$PROGRESS_FILE"
-      [[ -f "$ex_dir/$name.ex" ]] && echo "- [ ] 💻 $name (exercise)" >> "$PROGRESS_FILE"
+    local topics=$(get_topics "$section")
+    for topic in $topics; do
+      echo "- [ ] $topic" >> "$PROGRESS_FILE"
     done
-
     echo "" >> "$PROGRESS_FILE"
   done
 }
 
-# Get all items (docs + exercises) for a section - interleaved
-get_items() {
-  local section=$1
-  local docs_dir="$PROJECT_DIR/$section"
-  local ex_dir="$PROJECT_DIR/exercises/$section"
-  local items=""
-
-  # Get all unique base names from docs and exercises
-  local all_names=""
-
-  if [[ -d "$docs_dir" ]]; then
-    for f in "$docs_dir"/*.md; do
-      [[ -e "$f" ]] || continue
-      local name=$(basename "$f" .md)
-      all_names="$all_names $name"
-    done
-  fi
-
-  if [[ -d "$ex_dir" ]]; then
-    for f in "$ex_dir"/*.ex; do
-      [[ -e "$f" ]] || continue
-      local name=$(basename "$f" .ex)
-      all_names="$all_names $name"
-    done
-  fi
-
-  # Sort unique names
-  local sorted_names=$(echo "$all_names" | tr ' ' '\n' | grep -v '^$' | sort -u)
-
-  # For each name, add doc then exercise if they exist
-  for name in $sorted_names; do
-    if [[ -f "$docs_dir/$name.md" ]]; then
-      items="$items doc:$name"
-    fi
-    if [[ -f "$ex_dir/$name.ex" ]]; then
-      items="$items exercise:$name"
-    fi
-  done
-
-  echo $items
-}
-
-# Check if item is complete
 is_complete() {
-  local section=$1
-  local type=$2
-  local name=$3
-
-  local icon="📖"
-  [[ "$type" == "exercise" ]] && icon="💻"
-
-  grep -q "\[x\] $icon $name" "$PROGRESS_FILE" 2>/dev/null
+  local topic=$1
+  grep -q "\[x\] $topic$" "$PROGRESS_FILE" 2>/dev/null
 }
 
-# Mark item complete
 mark_complete() {
-  local section=$1
-  local type=$2
-  local name=$3
-
-  local icon="📖"
-  local suffix=""
-  [[ "$type" == "exercise" ]] && icon="💻" && suffix=" (exercise)"
-
-  # Use sed to mark complete
+  local topic=$1
   if [[ "$(uname)" == "Darwin" ]]; then
-    sed -i '' "s/\- \[ \] $icon $name$suffix/- [x] $icon $name$suffix/" "$PROGRESS_FILE"
+    sed -i '' "s/- \[ \] $topic$/- [x] $topic/" "$PROGRESS_FILE"
   else
-    sed -i "s/\- \[ \] $icon $name$suffix/- [x] $icon $name$suffix/" "$PROGRESS_FILE"
+    sed -i "s/- \[ \] $topic$/- [x] $topic/" "$PROGRESS_FILE"
   fi
 }
 
-# Count progress
 count_progress() {
   local section=$1
-  local total=0
-  local done=0
+  local total=0 done=0
 
   if [[ ! -f "$PROGRESS_FILE" ]]; then
-    echo "0/0"
+    printf "0/0"
     return
   fi
 
@@ -186,17 +117,23 @@ count_progress() {
     total=$(grep -c "^\- \[" "$PROGRESS_FILE" 2>/dev/null) || total=0
     done=$(grep -c "^\- \[x\]" "$PROGRESS_FILE" 2>/dev/null) || done=0
   else
-    # Count for specific section
-    local section_content
-    section_content=$(sed -n "/^## $section\$/,/^## /p" "$PROGRESS_FILE" 2>/dev/null)
-    total=$(echo "$section_content" | grep -c "^\- \[" 2>/dev/null) || total=0
-    done=$(echo "$section_content" | grep -c "^\- \[x\]" 2>/dev/null) || done=0
+    local content
+    content=$(sed -n "/^## $section\$/,/^## /p" "$PROGRESS_FILE" 2>/dev/null)
+    total=$(echo "$content" | grep -c "^\- \[" 2>/dev/null) || total=0
+    done=$(echo "$content" | grep -c "^\- \[x\]" 2>/dev/null) || done=0
   fi
 
   printf "%d/%d" "$done" "$total"
 }
 
-# Display status
+has_doc() {
+  [[ -f "$PROJECT_DIR/$CURRENT_SECTION/$1.md" ]]
+}
+
+has_exercise() {
+  [[ -f "$PROJECT_DIR/exercises/$CURRENT_SECTION/$1.ex" ]]
+}
+
 show_status() {
   clear
   echo -e "${BOLD}${CYAN}╔═══════════════════════════════════════════════╗${NC}"
@@ -208,29 +145,25 @@ show_status() {
   local section_progress=$(count_progress "$CURRENT_SECTION")
   echo -e "${BOLD}Overall:${NC} ${GREEN}$progress${NC} complete"
   echo ""
+  echo -e "${BOLD}Section:${NC} ${YELLOW}$CURRENT_SECTION${NC} ($section_progress)"
+  echo -e "${BOLD}Topic:${NC}   ${YELLOW}$CURRENT_TOPIC${NC}"
 
-  local type_icon="📖"
-  local type_label="Doc"
-  [[ "$CURRENT_TYPE" == "exercise" ]] && type_icon="💻" && type_label="Exercise"
+  # Show what's available
+  local avail=""
+  has_doc "$CURRENT_TOPIC" && avail="📖 doc"
+  has_exercise "$CURRENT_TOPIC" && avail="$avail 💻 exercise"
+  echo -e "         ${DIM}$avail${NC}"
 
-  echo -e "${BOLD}Section:${NC}  ${YELLOW}$CURRENT_SECTION${NC} ($section_progress)"
-  echo -e "${BOLD}Current:${NC}  $type_icon ${YELLOW}$CURRENT_ITEM${NC} ${DIM}($type_label)${NC}"
-
-  # Show completion status
-  if is_complete "$CURRENT_SECTION" "$CURRENT_TYPE" "$CURRENT_ITEM"; then
-    echo -e "          ${GREEN}✓ Completed${NC}"
+  # Completion status
+  if is_complete "$CURRENT_TOPIC"; then
+    echo -e "         ${GREEN}✓ Completed${NC}"
   else
-    echo -e "          ${DIM}○ In progress${NC}"
-  fi
-
-  # For exercises, show TODO count
-  if [[ "$CURRENT_TYPE" == "exercise" ]]; then
-    local ex_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_ITEM.ex"
+    echo -e "         ${DIM}○ In progress${NC}"
+    # Show exercise TODOs
+    local ex_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
     if [[ -f "$ex_file" ]]; then
-      local todos=$(grep -c ":todo" "$ex_file" 2>/dev/null || echo "0")
-      if [[ "$todos" -gt 0 ]]; then
-        echo -e "          ${YELLOW}$todos exercises remaining${NC}"
-      fi
+      local todos=$(grep -c ":todo" "$ex_file" 2>/dev/null) || todos=0
+      [[ $todos -gt 0 ]] && echo -e "         ${YELLOW}$todos exercises remaining${NC}"
     fi
   fi
 
@@ -238,126 +171,88 @@ show_status() {
   echo -e "${BOLD}─────────────────────────────────────────────────${NC}"
 }
 
-# Menu
 show_menu() {
   echo ""
-  echo -e "${BOLD}Navigation${NC}          ${BOLD}Actions${NC}"
-  echo -e "  ${CYAN}n${NC} Next item        ${CYAN}o${NC} Open current"
-  echo -e "  ${CYAN}p${NC} Previous         ${CYAN}t${NC} Run tests ${DIM}(exercise)${NC}"
-  echo -e "  ${CYAN}j${NC} Jump section     ${CYAN}f${NC} Get feedback"
-  echo -e "  ${CYAN}l${NC} List all         ${CYAN}s${NC} View solution"
-  echo ""
+  echo -e "${BOLD}Navigate${NC}            ${BOLD}Actions${NC}"
+  echo -e "  ${CYAN}n${NC} Next            ${CYAN}d${NC} Open doc"
+  echo -e "  ${CYAN}p${NC} Previous        ${CYAN}e${NC} Open exercise"
+  echo -e "  ${CYAN}j${NC} Jump            ${CYAN}t${NC} Run tests"
+  echo -e "  ${CYAN}l${NC} List all        ${CYAN}f${NC} Get feedback"
+  echo -e "                    ${CYAN}s${NC} View solution"
   echo -e "${BOLD}Progress${NC}"
-  echo -e "  ${CYAN}x${NC} Mark complete    ${CYAN}c${NC} Commit progress"
+  echo -e "  ${CYAN}x${NC} Mark complete   ${CYAN}c${NC} Commit"
   echo -e "  ${CYAN}q${NC} Quit"
   echo ""
   echo -ne "${BOLD}> ${NC}"
 }
 
-# Open current item
-open_current() {
-  if [[ "$CURRENT_TYPE" == "doc" ]]; then
-    local doc_file="$PROJECT_DIR/$CURRENT_SECTION/$CURRENT_ITEM.md"
-    [[ -f "$doc_file" ]] && nvim "$doc_file"
-  else
-    local ex_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_ITEM.ex"
-    [[ -f "$ex_file" ]] && nvim "$ex_file"
-  fi
+open_doc() {
+  local doc="$PROJECT_DIR/$CURRENT_SECTION/$CURRENT_TOPIC.md"
+  [[ -f "$doc" ]] && nvim "$doc" || echo -e "${YELLOW}No doc for this topic${NC}"
 }
 
-# Run tests
-run_tests() {
-  if [[ "$CURRENT_TYPE" != "exercise" ]]; then
-    echo -e "${YELLOW}No tests for docs. Press 'n' to go to exercise.${NC}"
-    read -n1 -s
-    return
-  fi
+open_exercise() {
+  local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+  [[ -f "$ex" ]] && nvim "$ex" || echo -e "${YELLOW}No exercise for this topic${NC}"
+}
 
-  local ex_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_ITEM.ex"
-  if [[ -f "$ex_file" ]]; then
+run_tests() {
+  local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+  if [[ -f "$ex" ]]; then
     echo -e "${CYAN}Running tests...${NC}"
     echo ""
-    elixir "$ex_file"
+    elixir "$ex"
   else
-    echo -e "${RED}No exercise file found${NC}"
+    echo -e "${YELLOW}No exercise file${NC}"
   fi
   echo ""
   read -n1 -s -p "Press any key..."
 }
 
-# Get feedback
 get_feedback() {
-  local file
-  if [[ "$CURRENT_TYPE" == "doc" ]]; then
-    file="$PROJECT_DIR/$CURRENT_SECTION/$CURRENT_ITEM.md"
-  else
-    file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_ITEM.ex"
-  fi
-
-  if [[ -f "$file" ]]; then
+  local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+  if [[ -f "$ex" ]]; then
     echo -e "${CYAN}Run in agent tab:${NC}"
-    echo -e "${YELLOW}/elixir-review $file${NC}"
-    echo "$file" | pbcopy 2>/dev/null || true
-    echo -e "${GREEN}Path copied to clipboard${NC}"
+    echo -e "${YELLOW}/elixir-review $ex${NC}"
+    echo "$ex" | pbcopy 2>/dev/null || true
+    echo -e "${GREEN}Path copied${NC}"
+  else
+    echo -e "${YELLOW}No exercise file${NC}"
   fi
   read -n1 -s -p "Press any key..."
 }
 
-# View solution
 view_solution() {
-  local solution_file="$PROJECT_DIR/exercises/solutions/$CURRENT_ITEM.ex"
-  if [[ -f "$solution_file" ]]; then
+  local sol="$PROJECT_DIR/exercises/solutions/$CURRENT_TOPIC.ex"
+  if [[ -f "$sol" ]]; then
     echo -e "${YELLOW}View solution? (y/N)${NC}"
     read -n1 confirm
     echo ""
-    [[ "$confirm" =~ ^[Yy]$ ]] && nvim -R "$solution_file"
+    [[ "$confirm" =~ ^[Yy]$ ]] && nvim -R "$sol"
   else
     echo -e "${YELLOW}No solution available${NC}"
     sleep 1
   fi
 }
 
-# Mark current complete
-mark_current_complete() {
-  mark_complete "$CURRENT_SECTION" "$CURRENT_TYPE" "$CURRENT_ITEM"
-  echo -e "${GREEN}✓ Marked complete!${NC}"
-  sleep 0.5
-}
-
-# Navigate
 navigate() {
   local direction=$1
-  local items_str
-  items_str=$(get_items "$CURRENT_SECTION")
-  local -a items=($items_str)
-  local current_key="$CURRENT_TYPE:$CURRENT_ITEM"
-  local current_idx=0
-  local num_items=${#items[@]}
+  local topics=$(get_topics "$CURRENT_SECTION")
+  local topics_arr=($topics)
+  local num=${#topics_arr[@]}
+  local idx=0
 
-  if [[ $num_items -eq 0 ]]; then
-    return
-  fi
-
-  for i in "${!items[@]}"; do
-    if [[ "${items[$i]}" == "$current_key" ]]; then
-      current_idx=$i
-      break
-    fi
+  for i in "${!topics_arr[@]}"; do
+    [[ "${topics_arr[$i]}" == "$CURRENT_TOPIC" ]] && idx=$i && break
   done
 
   local new_idx
-  if [[ "$direction" == "next" ]]; then
-    new_idx=$((current_idx + 1))
-  else
-    new_idx=$((current_idx - 1))
-  fi
+  [[ "$direction" == "next" ]] && new_idx=$((idx + 1)) || new_idx=$((idx - 1))
 
-  if [[ $new_idx -ge 0 && $new_idx -lt $num_items ]]; then
-    local new_item="${items[$new_idx]}"
-    CURRENT_TYPE="${new_item%%:*}"
-    CURRENT_ITEM="${new_item#*:}"
+  if [[ $new_idx -ge 0 && $new_idx -lt $num ]]; then
+    CURRENT_TOPIC="${topics_arr[$new_idx]}"
     save_state
-  elif [[ "$direction" == "next" && $new_idx -ge $num_items ]]; then
+  elif [[ "$direction" == "next" && $new_idx -ge $num ]]; then
     next_section
   elif [[ "$direction" == "prev" && $new_idx -lt 0 ]]; then
     prev_section
@@ -365,179 +260,135 @@ navigate() {
 }
 
 next_section() {
-  local current_idx=0
+  local idx=0
   for i in "${!SECTIONS[@]}"; do
-    if [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]]; then
-      current_idx=$i
-      break
-    fi
+    [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && idx=$i && break
   done
 
-  local next_idx=$((current_idx + 1))
-  if [[ $next_idx -lt ${#SECTIONS[@]} ]]; then
-    CURRENT_SECTION="${SECTIONS[$next_idx]}"
-    local items_str
-    items_str=$(get_items "$CURRENT_SECTION")
-    local -a items=($items_str)
-    if [[ ${#items[@]} -gt 0 ]]; then
-      local first="${items[0]}"
-      CURRENT_TYPE="${first%%:*}"
-      CURRENT_ITEM="${first#*:}"
-    fi
+  local next=$((idx + 1))
+  if [[ $next -lt ${#SECTIONS[@]} ]]; then
+    CURRENT_SECTION="${SECTIONS[$next]}"
+    local topics=$(get_topics "$CURRENT_SECTION")
+    local arr=($topics)
+    [[ ${#arr[@]} -gt 0 ]] && CURRENT_TOPIC="${arr[0]}"
     save_state
   fi
 }
 
 prev_section() {
-  local current_idx=0
+  local idx=0
   for i in "${!SECTIONS[@]}"; do
-    if [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]]; then
-      current_idx=$i
-      break
-    fi
+    [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && idx=$i && break
   done
 
-  local prev_idx=$((current_idx - 1))
-  if [[ $prev_idx -ge 0 ]]; then
-    CURRENT_SECTION="${SECTIONS[$prev_idx]}"
-    local items_str
-    items_str=$(get_items "$CURRENT_SECTION")
-    local -a items=($items_str)
-    local num_items=${#items[@]}
-    if [[ $num_items -gt 0 ]]; then
-      # Go to last item in previous section
-      local last_idx=$((num_items - 1))
-      local last="${items[$last_idx]}"
-      CURRENT_TYPE="${last%%:*}"
-      CURRENT_ITEM="${last#*:}"
-    fi
+  local prev=$((idx - 1))
+  if [[ $prev -ge 0 ]]; then
+    CURRENT_SECTION="${SECTIONS[$prev]}"
+    local topics=$(get_topics "$CURRENT_SECTION")
+    local arr=($topics)
+    local last=$((${#arr[@]} - 1))
+    [[ $last -ge 0 ]] && CURRENT_TOPIC="${arr[$last]}"
     save_state
   fi
 }
 
-# Jump to section
 jump_section() {
   echo ""
   echo -e "${BOLD}Sections:${NC}"
   for i in "${!SECTIONS[@]}"; do
     local mark=" "
     [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && mark=">"
-    local prog
-    prog=$(count_progress "${SECTIONS[$i]}")
+    local prog=$(count_progress "${SECTIONS[$i]}")
     echo -e "  ${CYAN}$((i+1))${NC} $mark ${SECTIONS[$i]} ${DIM}($prog)${NC}"
   done
   echo ""
-  read -p "Select (1-${#SECTIONS[@]}): " choice
+  read -p "Section (1-${#SECTIONS[@]}): " choice
 
   if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#SECTIONS[@]} ]]; then
     CURRENT_SECTION="${SECTIONS[$((choice-1))]}"
-
-    local items_str
-    items_str=$(get_items "$CURRENT_SECTION")
-    local -a items=($items_str)
-    local num_items=${#items[@]}
+    local topics=$(get_topics "$CURRENT_SECTION")
+    local arr=($topics)
 
     echo ""
-    echo -e "${BOLD}Items:${NC}"
-    for i in "${!items[@]}"; do
-      local item="${items[$i]}"
-      local type="${item%%:*}"
-      local name="${item#*:}"
-      local icon="📖"
-      [[ "$type" == "exercise" ]] && icon="💻"
+    echo -e "${BOLD}Topics:${NC}"
+    for i in "${!arr[@]}"; do
       local status="○"
-      is_complete "$CURRENT_SECTION" "$type" "$name" && status="${GREEN}✓${NC}"
-      echo -e "  ${CYAN}$((i+1))${NC} $status $icon $name"
+      is_complete "${arr[$i]}" && status="${GREEN}✓${NC}"
+      echo -e "  ${CYAN}$((i+1))${NC} $status ${arr[$i]}"
     done
     echo ""
-    read -p "Select (1-$num_items): " item_choice
+    read -p "Topic (1-${#arr[@]}): " tchoice
 
-    if [[ "$item_choice" =~ ^[0-9]+$ ]] && [[ $item_choice -ge 1 ]] && [[ $item_choice -le $num_items ]]; then
-      local selected="${items[$((item_choice-1))]}"
-      CURRENT_TYPE="${selected%%:*}"
-      CURRENT_ITEM="${selected#*:}"
+    if [[ "$tchoice" =~ ^[0-9]+$ ]] && [[ $tchoice -ge 1 ]] && [[ $tchoice -le ${#arr[@]} ]]; then
+      CURRENT_TOPIC="${arr[$((tchoice-1))]}"
     fi
     save_state
   fi
 }
 
-# List all
 list_all() {
   echo ""
   for section in "${SECTIONS[@]}"; do
-    local prog
-    prog=$(count_progress "$section")
+    local prog=$(count_progress "$section")
     local mark=" "
     [[ "$section" == "$CURRENT_SECTION" ]] && mark="${CYAN}>${NC}"
     echo -e "$mark ${BOLD}$section${NC} ${DIM}($prog)${NC}"
 
-    local items_str
-    items_str=$(get_items "$section")
-    local -a items=($items_str)
-    for item in "${items[@]}"; do
-      local type="${item%%:*}"
-      local name="${item#*:}"
-      local icon="📖"
-      [[ "$type" == "exercise" ]] && icon="💻"
+    local topics=$(get_topics "$section")
+    for topic in $topics; do
       local status="○"
-      is_complete "$section" "$type" "$name" && status="${GREEN}✓${NC}"
-      local current=""
-      [[ "$section" == "$CURRENT_SECTION" && "$type" == "$CURRENT_TYPE" && "$name" == "$CURRENT_ITEM" ]] && current=" ${YELLOW}◀${NC}"
-      echo -e "    $status $icon $name$current"
+      is_complete "$topic" && status="${GREEN}✓${NC}"
+      local cur=""
+      [[ "$section" == "$CURRENT_SECTION" && "$topic" == "$CURRENT_TOPIC" ]] && cur=" ${YELLOW}◀${NC}"
+      echo -e "    $status $topic$cur"
     done
   done
   echo ""
   read -n1 -s -p "Press any key..."
 }
 
-# Commit progress
 commit_progress() {
   cd "$PROJECT_DIR"
-
   if git diff --quiet && git diff --cached --quiet; then
-    echo -e "${YELLOW}No changes to commit${NC}"
+    echo -e "${YELLOW}No changes${NC}"
     read -n1 -s
     return
   fi
 
   git add -A
-  local msg="progress: $CURRENT_SECTION/$CURRENT_ITEM"
-
-  # Check if completing a section
-  local section_prog=$(count_progress "$CURRENT_SECTION")
-  IFS='/' read -r done total <<< "$section_prog"
+  local msg="progress: $CURRENT_SECTION/$CURRENT_TOPIC"
+  local prog=$(count_progress "$CURRENT_SECTION")
+  local done="${prog%/*}"
+  local total="${prog#*/}"
   [[ "$done" == "$total" ]] && msg="complete: $CURRENT_SECTION"
 
   git commit -m "$msg
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
-  echo -e "${GREEN}✓ Committed: $msg${NC}"
+  echo -e "${GREEN}✓ $msg${NC}"
   read -n1 -s -p "Press any key..."
 }
 
-# Main loop
 main() {
   load_state
-
   while true; do
     show_status
     show_menu
     read -n1 cmd
     echo ""
-
     case $cmd in
-      o) open_current ;;
+      d) open_doc ;;
+      e) open_exercise ;;
       t) run_tests ;;
       f) get_feedback ;;
       s) view_solution ;;
-      x) mark_current_complete ;;
+      x) mark_complete "$CURRENT_TOPIC"; echo -e "${GREEN}✓ Done${NC}"; sleep 0.5 ;;
       c) commit_progress ;;
       n) navigate next ;;
       p) navigate prev ;;
       j) jump_section ;;
       l) list_all ;;
       q) echo "Happy learning!"; exit 0 ;;
-      *) ;;
     esac
   done
 }
