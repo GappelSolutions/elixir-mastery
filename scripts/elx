@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Elixir Learning CLI - Track progress through docs AND exercises
 
-set -e
+# Don't exit on error - we handle errors gracefully
+set +e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -146,16 +147,26 @@ mark_complete() {
 # Count progress
 count_progress() {
   local section=$1
-  local total=$(grep -c "^\- \[" "$PROGRESS_FILE" 2>/dev/null || echo 0)
-  local done=$(grep -c "^\- \[x\]" "$PROGRESS_FILE" 2>/dev/null || echo 0)
+  local total=0
+  local done=0
 
-  if [[ -n "$section" ]]; then
-    # Count for specific section - look between section header and next ## or EOF
-    total=$(sed -n "/^## $section$/,/^## /p" "$PROGRESS_FILE" | grep -c "^\- \[" 2>/dev/null || echo 0)
-    done=$(sed -n "/^## $section$/,/^## /p" "$PROGRESS_FILE" | grep -c "^\- \[x\]" 2>/dev/null || echo 0)
+  if [[ ! -f "$PROGRESS_FILE" ]]; then
+    echo "0/0"
+    return
   fi
 
-  echo "$done/$total"
+  if [[ -z "$section" ]]; then
+    total=$(grep -c "^\- \[" "$PROGRESS_FILE" 2>/dev/null) || total=0
+    done=$(grep -c "^\- \[x\]" "$PROGRESS_FILE" 2>/dev/null) || done=0
+  else
+    # Count for specific section
+    local section_content
+    section_content=$(sed -n "/^## $section\$/,/^## /p" "$PROGRESS_FILE" 2>/dev/null)
+    total=$(echo "$section_content" | grep -c "^\- \[" 2>/dev/null) || total=0
+    done=$(echo "$section_content" | grep -c "^\- \[x\]" 2>/dev/null) || done=0
+  fi
+
+  printf "%d/%d" "$done" "$total"
 }
 
 # Display status
@@ -289,9 +300,16 @@ mark_current_complete() {
 # Navigate
 navigate() {
   local direction=$1
-  local items=($(get_items "$CURRENT_SECTION"))
+  local items_str
+  items_str=$(get_items "$CURRENT_SECTION")
+  local -a items=($items_str)
   local current_key="$CURRENT_TYPE:$CURRENT_ITEM"
   local current_idx=0
+  local num_items=${#items[@]}
+
+  if [[ $num_items -eq 0 ]]; then
+    return
+  fi
 
   for i in "${!items[@]}"; do
     if [[ "${items[$i]}" == "$current_key" ]]; then
@@ -307,29 +325,40 @@ navigate() {
     new_idx=$((current_idx - 1))
   fi
 
-  if [[ $new_idx -ge 0 && $new_idx -lt ${#items[@]} ]]; then
-    IFS=':' read -r CURRENT_TYPE CURRENT_ITEM <<< "${items[$new_idx]}"
+  if [[ $new_idx -ge 0 && $new_idx -lt $num_items ]]; then
+    local new_item="${items[$new_idx]}"
+    CURRENT_TYPE="${new_item%%:*}"
+    CURRENT_ITEM="${new_item#*:}"
     save_state
-  elif [[ "$direction" == "next" && $new_idx -ge ${#items[@]} ]]; then
+  elif [[ "$direction" == "next" && $new_idx -ge $num_items ]]; then
     echo -e "${YELLOW}Section complete! Next section? (y/N)${NC}"
     read -n1 confirm
     echo ""
-    [[ "$confirm" =~ ^[Yy]$ ]] && next_section
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      next_section
+    fi
   fi
 }
 
 next_section() {
   local current_idx=0
   for i in "${!SECTIONS[@]}"; do
-    [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && current_idx=$i && break
+    if [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]]; then
+      current_idx=$i
+      break
+    fi
   done
 
   local next_idx=$((current_idx + 1))
   if [[ $next_idx -lt ${#SECTIONS[@]} ]]; then
     CURRENT_SECTION="${SECTIONS[$next_idx]}"
-    local items=($(get_items "$CURRENT_SECTION"))
+    local items_str
+    items_str=$(get_items "$CURRENT_SECTION")
+    local -a items=($items_str)
     if [[ ${#items[@]} -gt 0 ]]; then
-      IFS=':' read -r CURRENT_TYPE CURRENT_ITEM <<< "${items[0]}"
+      local first="${items[0]}"
+      CURRENT_TYPE="${first%%:*}"
+      CURRENT_ITEM="${first#*:}"
     fi
     save_state
   fi
@@ -342,7 +371,8 @@ jump_section() {
   for i in "${!SECTIONS[@]}"; do
     local mark=" "
     [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && mark=">"
-    local prog=$(count_progress "${SECTIONS[$i]}")
+    local prog
+    prog=$(count_progress "${SECTIONS[$i]}")
     echo -e "  ${CYAN}$((i+1))${NC} $mark ${SECTIONS[$i]} ${DIM}($prog)${NC}"
   done
   echo ""
@@ -351,11 +381,17 @@ jump_section() {
   if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#SECTIONS[@]} ]]; then
     CURRENT_SECTION="${SECTIONS[$((choice-1))]}"
 
-    local items=($(get_items "$CURRENT_SECTION"))
+    local items_str
+    items_str=$(get_items "$CURRENT_SECTION")
+    local -a items=($items_str)
+    local num_items=${#items[@]}
+
     echo ""
     echo -e "${BOLD}Items:${NC}"
     for i in "${!items[@]}"; do
-      IFS=':' read -r type name <<< "${items[$i]}"
+      local item="${items[$i]}"
+      local type="${item%%:*}"
+      local name="${item#*:}"
       local icon="📖"
       [[ "$type" == "exercise" ]] && icon="💻"
       local status="○"
@@ -363,10 +399,12 @@ jump_section() {
       echo -e "  ${CYAN}$((i+1))${NC} $status $icon $name"
     done
     echo ""
-    read -p "Select (1-${#items[@]}): " item_choice
+    read -p "Select (1-$num_items): " item_choice
 
-    if [[ "$item_choice" =~ ^[0-9]+$ ]] && [[ $item_choice -ge 1 ]] && [[ $item_choice -le ${#items[@]} ]]; then
-      IFS=':' read -r CURRENT_TYPE CURRENT_ITEM <<< "${items[$((item_choice-1))]}"
+    if [[ "$item_choice" =~ ^[0-9]+$ ]] && [[ $item_choice -ge 1 ]] && [[ $item_choice -le $num_items ]]; then
+      local selected="${items[$((item_choice-1))]}"
+      CURRENT_TYPE="${selected%%:*}"
+      CURRENT_ITEM="${selected#*:}"
     fi
     save_state
   fi
@@ -376,14 +414,18 @@ jump_section() {
 list_all() {
   echo ""
   for section in "${SECTIONS[@]}"; do
-    local prog=$(count_progress "$section")
+    local prog
+    prog=$(count_progress "$section")
     local mark=" "
     [[ "$section" == "$CURRENT_SECTION" ]] && mark="${CYAN}>${NC}"
     echo -e "$mark ${BOLD}$section${NC} ${DIM}($prog)${NC}"
 
-    local items=($(get_items "$section"))
+    local items_str
+    items_str=$(get_items "$section")
+    local -a items=($items_str)
     for item in "${items[@]}"; do
-      IFS=':' read -r type name <<< "$item"
+      local type="${item%%:*}"
+      local name="${item#*:}"
       local icon="📖"
       [[ "$type" == "exercise" ]] && icon="💻"
       local status="○"
