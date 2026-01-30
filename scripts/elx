@@ -67,37 +67,32 @@ EOF
     echo "## $section" >> "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
 
-    local -A docs=()
-    local -A exercises=()
-    local all_names=()
-
-    # Collect docs
     local docs_dir="$PROJECT_DIR/$section"
-    if [[ -d "$docs_dir" ]]; then
-      for doc in $(ls "$docs_dir"/*.md 2>/dev/null | sort); do
-        local name=$(basename "$doc" .md)
-        docs["$name"]=1
-        all_names+=("$name")
-      done
-    fi
-
-    # Collect exercises
     local ex_dir="$PROJECT_DIR/exercises/$section"
-    if [[ -d "$ex_dir" ]]; then
-      for ex in $(ls "$ex_dir"/*.ex 2>/dev/null | sort); do
-        local name=$(basename "$ex" .ex)
-        exercises["$name"]=1
-        if [[ -z "${docs[$name]}" ]]; then
-          all_names+=("$name")
-        fi
+    local all_names=""
+
+    # Collect all names
+    if [[ -d "$docs_dir" ]]; then
+      for f in "$docs_dir"/*.md; do
+        [[ -e "$f" ]] || continue
+        local name=$(basename "$f" .md)
+        all_names="$all_names $name"
       done
     fi
 
-    # Sort and interleave
-    local sorted_names=($(printf '%s\n' "${all_names[@]}" | sort -u))
-    for name in "${sorted_names[@]}"; do
-      [[ -n "${docs[$name]}" ]] && echo "- [ ] 📖 $name" >> "$PROGRESS_FILE"
-      [[ -n "${exercises[$name]}" ]] && echo "- [ ] 💻 $name (exercise)" >> "$PROGRESS_FILE"
+    if [[ -d "$ex_dir" ]]; then
+      for f in "$ex_dir"/*.ex; do
+        [[ -e "$f" ]] || continue
+        local name=$(basename "$f" .ex)
+        all_names="$all_names $name"
+      done
+    fi
+
+    # Sort unique and interleave
+    local sorted_names=$(echo "$all_names" | tr ' ' '\n' | grep -v '^$' | sort -u)
+    for name in $sorted_names; do
+      [[ -f "$docs_dir/$name.md" ]] && echo "- [ ] 📖 $name" >> "$PROGRESS_FILE"
+      [[ -f "$ex_dir/$name.ex" ]] && echo "- [ ] 💻 $name (exercise)" >> "$PROGRESS_FILE"
     done
 
     echo "" >> "$PROGRESS_FILE"
@@ -107,42 +102,43 @@ EOF
 # Get all items (docs + exercises) for a section - interleaved
 get_items() {
   local section=$1
-  local items=()
-  local -A docs=()
-  local -A exercises=()
-  local all_names=()
-
-  # Collect docs
   local docs_dir="$PROJECT_DIR/$section"
-  if [[ -d "$docs_dir" ]]; then
-    for doc in $(ls "$docs_dir"/*.md 2>/dev/null | sort); do
-      local name=$(basename "$doc" .md)
-      docs["$name"]=1
-      all_names+=("$name")
-    done
-  fi
-
-  # Collect exercises
   local ex_dir="$PROJECT_DIR/exercises/$section"
-  if [[ -d "$ex_dir" ]]; then
-    for ex in $(ls "$ex_dir"/*.ex 2>/dev/null | sort); do
-      local name=$(basename "$ex" .ex)
-      exercises["$name"]=1
-      # Only add if not already in list from docs
-      if [[ -z "${docs[$name]}" ]]; then
-        all_names+=("$name")
-      fi
+  local items=""
+
+  # Get all unique base names from docs and exercises
+  local all_names=""
+
+  if [[ -d "$docs_dir" ]]; then
+    for f in "$docs_dir"/*.md; do
+      [[ -e "$f" ]] || continue
+      local name=$(basename "$f" .md)
+      all_names="$all_names $name"
     done
   fi
 
-  # Sort and interleave: for each name, add doc then exercise
-  local sorted_names=($(printf '%s\n' "${all_names[@]}" | sort -u))
-  for name in "${sorted_names[@]}"; do
-    [[ -n "${docs[$name]}" ]] && items+=("doc:$name")
-    [[ -n "${exercises[$name]}" ]] && items+=("exercise:$name")
+  if [[ -d "$ex_dir" ]]; then
+    for f in "$ex_dir"/*.ex; do
+      [[ -e "$f" ]] || continue
+      local name=$(basename "$f" .ex)
+      all_names="$all_names $name"
+    done
+  fi
+
+  # Sort unique names
+  local sorted_names=$(echo "$all_names" | tr ' ' '\n' | grep -v '^$' | sort -u)
+
+  # For each name, add doc then exercise if they exist
+  for name in $sorted_names; do
+    if [[ -f "$docs_dir/$name.md" ]]; then
+      items="$items doc:$name"
+    fi
+    if [[ -f "$ex_dir/$name.ex" ]]; then
+      items="$items exercise:$name"
+    fi
   done
 
-  echo "${items[@]}"
+  echo $items
 }
 
 # Check if item is complete
