@@ -11,19 +11,16 @@
 # - response = {:ok, %{x: 10, y: 20}} -> x = 10, y = 20
 
 defmodule Exercise1 do
-  def extract_2d({_x, _y} = _point) do
-    # Return {x, y}
-    :todo
+  def extract_2d({x, y}) do
+    {x, y}
   end
 
-  def extract_3d({_x, _y, _z} = _point) do
-    # Return {x, y, z}
-    :todo
+  def extract_3d({x, y, z}) do
+    {x, y, z}
   end
 
-  def extract_from_response({:ok, %{x: _x, y: _y}} = _response) do
-    # Return {x, y}
-    :todo
+  def extract_from_response({:ok, %{x: x, y: y}}) do
+    {x, y}
   end
 end
 
@@ -38,10 +35,11 @@ end
 # - longer    -> :many
 
 defmodule Exercise2 do
-  def classify(_list) do
-    # Use pattern matching in function heads, no if/case
-    :todo
-  end
+  def classify([]), do: :empty
+  def classify([_]), do: :single
+  def classify([_, _]), do: :pair
+  def classify([_, _, _]), do: :triple
+  def classify([_, _, _ | _]), do: :many
 end
 
 # =============================================================================
@@ -51,14 +49,20 @@ end
 # No if statements allowed!
 
 defmodule Exercise3 do
-  def fizzbuzz(_n) do
-    # Match on the tuple {rem(n, 3), rem(n, 5)}
-    # Return "FizzBuzz", "Fizz", "Buzz", or the number as string
-    :todo
+  def fizzbuzz(n) do
+    case {rem(n, 3), rem(n, 5)} do
+      {0, 0} -> "FizzBuzz"
+      {0, _} -> "Fizz"
+      {_, 0} -> "Buzz"
+      _ -> Integer.to_string(n)
+    end
   end
 
   def run(max) do
-    Enum.map(1..max, &fizzbuzz/1)
+    1..max
+    |> Enum.map(&fizzbuzz/1)
+    |> Enum.join(", ")
+    |> IO.puts()
   end
 end
 
@@ -69,11 +73,9 @@ end
 # sum([1, [2, 3], [[4]]]) should return 10
 
 defmodule Exercise4 do
-  def sum(_list) do
-    # Handle: empty list, nested lists, integers
-    # Hint: use is_list/1 guard
-    :todo
-  end
+  def sum([]), do: 0
+  def sum([head | tail]) when is_list(head), do: sum(head) + sum(tail)
+  def sum([head | tail]), do: head + sum(tail)
 end
 
 # =============================================================================
@@ -86,9 +88,13 @@ end
 # "a=b=c"      -> {:ok, {"a", "b=c"}}
 
 defmodule Exercise5 do
-  def parse(_string) do
-    # Use pattern matching with String.split
-    :todo
+  def parse(""), do: {:error, :empty}
+
+  def parse(string) do
+    case String.split(string, "=", parts: 2) do
+      [key, value] -> {:ok, {key, value}}
+      [_] -> {:error, :invalid_format}
+    end
   end
 end
 
@@ -103,17 +109,23 @@ end
 # Return {:ok, %{type: atom, payload: binary}} or {:error, reason}
 
 defmodule Exercise6 do
-  def parse(_binary) do
-    # Use binary pattern matching: <<type, length::16-big, payload::binary-size(length)>>
-    :todo
-  end
+  def parse(<<type_binary::8, payload_length::16, payload::binary-size(payload_length)>>),
+    do: {:ok, %{type: get_type(type_binary), payload: payload}}
+
+  def parse(_), do: {:error, :invalid_format}
+
+  defp get_type(1), do: :text
+  defp get_type(2), do: :binary
+  defp get_type(3), do: :ping
+  defp get_type(_), do: :invalid_type
 end
 
 # =============================================================================
 # Tests - Run to verify your solutions
 # =============================================================================
 
-ExUnit.start(auto_run: false)
+# Start ExUnit if not using external runner
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.start(auto_run: false)
 
 defmodule PatternMatchingTest do
   use ExUnit.Case
@@ -232,4 +244,5 @@ defmodule PatternMatchingTest do
   end
 end
 
-ExUnit.run()
+# Run tests if executed directly (not via external runner)
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.run()

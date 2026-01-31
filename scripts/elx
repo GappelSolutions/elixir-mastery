@@ -36,14 +36,17 @@ load_state() {
   else
     CURRENT_SECTION="01-elixir-core"
     CURRENT_TOPIC="01-pattern-matching"
+    CURRENT_EXERCISE=1
     save_state
   fi
+  [[ -z "$CURRENT_EXERCISE" ]] && CURRENT_EXERCISE=1
   [[ ! -f "$PROGRESS_FILE" ]] && init_progress_file
 }
 
 save_state() {
   echo "CURRENT_SECTION=\"$CURRENT_SECTION\"" > "$STATE_FILE"
   echo "CURRENT_TOPIC=\"$CURRENT_TOPIC\"" >> "$STATE_FILE"
+  echo "CURRENT_EXERCISE=$CURRENT_EXERCISE" >> "$STATE_FILE"
 }
 
 # Get all topics for a section
@@ -95,12 +98,22 @@ is_complete() {
   grep -q "\[x\] $topic$" "$PROGRESS_FILE" 2>/dev/null
 }
 
-mark_complete() {
+toggle_complete() {
   local topic=$1
-  if [[ "$(uname)" == "Darwin" ]]; then
-    sed -i '' "s/- \[ \] $topic$/- [x] $topic/" "$PROGRESS_FILE"
+  if is_complete "$topic"; then
+    # Mark incomplete
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s/- \[x\] $topic$/- [ ] $topic/" "$PROGRESS_FILE"
+    else
+      sed -i "s/- \[x\] $topic$/- [ ] $topic/" "$PROGRESS_FILE"
+    fi
   else
-    sed -i "s/- \[ \] $topic$/- [x] $topic/" "$PROGRESS_FILE"
+    # Mark complete
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s/- \[ \] $topic$/- [x] $topic/" "$PROGRESS_FILE"
+    else
+      sed -i "s/- \[ \] $topic$/- [x] $topic/" "$PROGRESS_FILE"
+    fi
   fi
 }
 
@@ -134,6 +147,19 @@ has_exercise() {
   [[ -f "$PROJECT_DIR/exercises/$CURRENT_SECTION/$1.ex" ]]
 }
 
+count_exercises() {
+  local ex=$1
+  grep -c "defmodule Exercise[0-9]" "$ex" 2>/dev/null || echo 0
+}
+
+sync_exercise_to_file() {
+  # Sync CURRENT_EXERCISE to actual first incomplete exercise in file
+  local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+  [[ ! -f "$ex" ]] && return
+  CURRENT_EXERCISE=$(get_current_exercise "$ex")
+  save_state
+}
+
 show_status() {
   clear
   echo -e "${BOLD}${CYAN}╔═══════════════════════════════════════════════╗${NC}"
@@ -154,16 +180,29 @@ show_status() {
   has_exercise "$CURRENT_TOPIC" && avail="$avail 💻 exercise"
   echo -e "         ${DIM}$avail${NC}"
 
+  local ex_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+
+  # Show current exercise step
+  if [[ -f "$ex_file" ]]; then
+    local total=$(count_exercises "$ex_file")
+    local describe=$(get_exercise_describe "$ex_file" "$CURRENT_EXERCISE")
+    if [[ $total -gt 0 ]]; then
+      echo ""
+      echo -e "${BOLD}Exercise:${NC} ${GREEN}$CURRENT_EXERCISE${NC}/${total} - ${CYAN}${describe#Exercise* - }${NC}"
+    fi
+  fi
+
   # Completion status
   if is_complete "$CURRENT_TOPIC"; then
-    echo -e "         ${GREEN}✓ Completed${NC}"
+    echo -e "         ${GREEN}✓ Topic completed${NC}"
   else
-    echo -e "         ${DIM}○ In progress${NC}"
-    # Show exercise TODOs
-    local ex_file="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
     if [[ -f "$ex_file" ]]; then
       local todos=$(grep -c ":todo" "$ex_file" 2>/dev/null) || todos=0
-      [[ $todos -gt 0 ]] && echo -e "         ${YELLOW}$todos exercises remaining${NC}"
+      if [[ $todos -gt 0 ]]; then
+        echo -e "         ${DIM}○ $todos exercises remaining${NC}"
+      else
+        echo -e "         ${GREEN}✓ All exercises done!${NC}"
+      fi
     fi
   fi
 
@@ -173,15 +212,17 @@ show_status() {
 
 show_menu() {
   echo ""
-  echo -e "${BOLD}Navigate${NC}            ${BOLD}Actions${NC}"
-  echo -e "  ${CYAN}n${NC} Next            ${CYAN}d${NC} Open doc"
-  echo -e "  ${CYAN}p${NC} Previous        ${CYAN}e${NC} Open exercise"
-  echo -e "  ${CYAN}j${NC} Jump            ${CYAN}t${NC} Run tests"
-  echo -e "  ${CYAN}l${NC} List all        ${CYAN}f${NC} Get feedback"
-  echo -e "                    ${CYAN}s${NC} View solution"
-  echo -e "${BOLD}Progress${NC}"
-  echo -e "  ${CYAN}x${NC} Mark complete   ${CYAN}c${NC} Commit"
-  echo -e "  ${CYAN}q${NC} Quit"
+  echo -e "${BOLD}Exercises${NC}           ${BOLD}Actions${NC}"
+  echo -e "  ${CYAN}n${NC} Next step       ${CYAN}d${NC} Open doc"
+  echo -e "  ${CYAN}p${NC} Prev step       ${CYAN}e${NC} Open exercise"
+  echo -e "                    ${CYAN}t${NC} Run tests"
+  echo -e "${BOLD}Topics${NC}              ${CYAN}a${NC} All tests"
+  echo -e "  ${CYAN}w${NC} Next topic      ${CYAN}f${NC} Get feedback"
+  echo -e "  ${CYAN}b${NC} Prev topic      ${CYAN}s${NC} View solution"
+  echo -e "  ${CYAN}j${NC} Jump"
+  echo -e "  ${CYAN}l${NC} List all      ${BOLD}Progress${NC}"
+  echo -e "                    ${CYAN}x${NC} Mark complete"
+  echo -e "  ${CYAN}q${NC} Quit            ${CYAN}c${NC} Commit"
   echo ""
   echo -ne "${BOLD}> ${NC}"
 }
@@ -196,26 +237,94 @@ open_exercise() {
   [[ -f "$ex" ]] && nvim "$ex" || echo -e "${YELLOW}No exercise for this topic${NC}"
 }
 
+get_current_exercise() {
+  local ex=$1
+  local current=1
+
+  # Find first exercise module that still has :todo
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    local line
+    line=$(grep -n "defmodule Exercise$i\b" "$ex" 2>/dev/null | head -1 | cut -d: -f1)
+    if [[ -n "$line" ]]; then
+      # Check next 15 lines for :todo
+      if sed -n "${line},$((line+15))p" "$ex" | grep -q ":todo"; then
+        current=$i
+        break
+      fi
+      current=$((i+1))  # Move to next if this one is done
+    fi
+  done
+  echo $current
+}
+
+get_exercise_describe() {
+  local ex=$1
+  local num=$2
+  # Extract the describe block name for this exercise
+  grep "describe \"Exercise $num" "$ex" | head -1 | sed 's/.*describe "\([^"]*\)".*/\1/'
+}
+
 run_tests() {
   local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+  if [[ ! -f "$ex" ]]; then
+    echo -e "${YELLOW}No exercise file${NC}"
+    echo ""
+    read -n1 -s -p "Press any key..."
+    return
+  fi
+
+  local describe_name=$(get_exercise_describe "$ex" "$CURRENT_EXERCISE")
+
+  if [[ -z "$describe_name" ]]; then
+    echo -e "${YELLOW}No exercise $CURRENT_EXERCISE found${NC}"
+    echo ""
+    read -n1 -s -p "Press any key..."
+    return
+  fi
+
+  echo -e "${CYAN}Testing: $describe_name${NC}"
+  echo ""
+
+  # Create a filtered test runner
+  local runner="/tmp/elx_test_runner_$$.exs"
+  cat > "$runner" << RUNNER
+ExUnit.start(auto_run: true)
+ExUnit.configure(exclude: [:test], include: [describe: "$describe_name"])
+Code.compile_file("$ex")
+# Tests run automatically via at_exit hook
+RUNNER
+
+  # Run tests with full output
+  ELX_EXTERNAL_RUNNER=1 elixir "$runner" 2>&1
+  rm -f "$runner"
+
+  echo ""
+  read -n1 -s -p "Press any key (r to rerun)..." key
+  [[ "$key" == "r" ]] && clear && run_tests
+}
+
+run_all_tests() {
+  local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
   if [[ -f "$ex" ]]; then
-    echo -e "${CYAN}Running tests...${NC}"
+    echo -e "${CYAN}Running all tests...${NC}"
     echo ""
     elixir "$ex"
   else
     echo -e "${YELLOW}No exercise file${NC}"
   fi
   echo ""
-  read -n1 -s -p "Press any key..."
+  read -n1 -s -p "Press any key (r to rerun)..." key
+  [[ "$key" == "r" ]] && clear && run_all_tests
 }
 
 get_feedback() {
   local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
   if [[ -f "$ex" ]]; then
+    local prompt="/elixir-review $ex exercise:$CURRENT_EXERCISE"
     echo -e "${CYAN}Run in agent tab:${NC}"
-    echo -e "${YELLOW}/elixir-review $ex${NC}"
-    echo "$ex" | pbcopy 2>/dev/null || true
-    echo -e "${GREEN}Path copied${NC}"
+    echo -e "${YELLOW}$prompt${NC}"
+    echo "$prompt" | pbcopy 2>/dev/null || true
+    echo -e "${GREEN}Prompt copied${NC}"
   else
     echo -e "${YELLOW}No exercise file${NC}"
   fi
@@ -232,6 +341,44 @@ view_solution() {
   else
     echo -e "${YELLOW}No solution available${NC}"
     sleep 1
+  fi
+}
+
+navigate_exercise() {
+  local direction=$1
+  local ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+  [[ ! -f "$ex" ]] && return
+
+  local total=$(count_exercises "$ex")
+  [[ $total -eq 0 ]] && return
+
+  if [[ "$direction" == "next" ]]; then
+    if [[ $CURRENT_EXERCISE -lt $total ]]; then
+      CURRENT_EXERCISE=$((CURRENT_EXERCISE + 1))
+      save_state
+    else
+      # At last exercise, move to next topic
+      navigate next
+      CURRENT_EXERCISE=1
+      save_state
+    fi
+  else
+    if [[ $CURRENT_EXERCISE -gt 1 ]]; then
+      CURRENT_EXERCISE=$((CURRENT_EXERCISE - 1))
+      save_state
+    else
+      # At first exercise, move to previous topic
+      navigate prev
+      # Set to last exercise of previous topic
+      local prev_ex="$PROJECT_DIR/exercises/$CURRENT_SECTION/$CURRENT_TOPIC.ex"
+      if [[ -f "$prev_ex" ]]; then
+        CURRENT_EXERCISE=$(count_exercises "$prev_ex")
+        [[ $CURRENT_EXERCISE -lt 1 ]] && CURRENT_EXERCISE=1
+      else
+        CURRENT_EXERCISE=1
+      fi
+      save_state
+    fi
   fi
 }
 
@@ -294,7 +441,7 @@ prev_section() {
 
 jump_section() {
   echo ""
-  echo -e "${BOLD}Sections:${NC}"
+  echo -e "${BOLD}Sections:${NC} ${DIM}(ESC to cancel)${NC}"
   for i in "${!SECTIONS[@]}"; do
     local mark=" "
     [[ "${SECTIONS[$i]}" == "$CURRENT_SECTION" ]] && mark=">"
@@ -302,7 +449,15 @@ jump_section() {
     echo -e "  ${CYAN}$((i+1))${NC} $mark ${SECTIONS[$i]} ${DIM}($prog)${NC}"
   done
   echo ""
-  read -p "Section (1-${#SECTIONS[@]}): " choice
+  echo -ne "Section (1-${#SECTIONS[@]}): "
+  read -n1 choice
+  [[ "$choice" == $'\e' ]] && return
+  # Handle 10 (two digits)
+  if [[ "$choice" == "1" ]]; then
+    read -t 1 -n1 second
+    [[ "$second" =~ ^[0-9]$ ]] && choice="${choice}${second}"
+  fi
+  echo ""
 
   if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#SECTIONS[@]} ]]; then
     CURRENT_SECTION="${SECTIONS[$((choice-1))]}"
@@ -310,14 +465,22 @@ jump_section() {
     local arr=($topics)
 
     echo ""
-    echo -e "${BOLD}Topics:${NC}"
+    echo -e "${BOLD}Topics:${NC} ${DIM}(ESC to cancel)${NC}"
     for i in "${!arr[@]}"; do
       local status="○"
       is_complete "${arr[$i]}" && status="${GREEN}✓${NC}"
       echo -e "  ${CYAN}$((i+1))${NC} $status ${arr[$i]}"
     done
     echo ""
-    read -p "Topic (1-${#arr[@]}): " tchoice
+    echo -ne "Topic (1-${#arr[@]}): "
+    read -n1 tchoice
+    [[ "$tchoice" == $'\e' ]] && return
+    # Handle two digits
+    if [[ "$tchoice" == "1" ]] && [[ ${#arr[@]} -ge 10 ]]; then
+      read -t 1 -n1 second
+      [[ "$second" =~ ^[0-9]$ ]] && tchoice="${tchoice}${second}"
+    fi
+    echo ""
 
     if [[ "$tchoice" =~ ^[0-9]+$ ]] && [[ $tchoice -ge 1 ]] && [[ $tchoice -le ${#arr[@]} ]]; then
       CURRENT_TOPIC="${arr[$((tchoice-1))]}"
@@ -369,23 +532,46 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
   read -n1 -s -p "Press any key..."
 }
 
+get_state_mtime() {
+  stat -f %m "$STATE_FILE" 2>/dev/null || echo 0
+}
+
 main() {
   load_state
+  sync_exercise_to_file  # Sync exercise state on startup
+  local last_mtime=$(get_state_mtime)
+  local needs_redraw=1
   while true; do
-    show_status
-    show_menu
-    read -n1 cmd
+    if [[ $needs_redraw -eq 1 ]]; then
+      show_status
+      show_menu
+      needs_redraw=0
+    fi
+    if ! read -t 1 -n1 cmd; then
+      # Timeout - check if state file changed
+      local current_mtime=$(get_state_mtime)
+      if [[ "$current_mtime" != "$last_mtime" ]]; then
+        load_state
+        last_mtime=$current_mtime
+        needs_redraw=1
+      fi
+      continue
+    fi
     echo ""
+    needs_redraw=1
     case $cmd in
       d) open_doc ;;
       e) open_exercise ;;
       t) run_tests ;;
+      a) run_all_tests ;;
       f) get_feedback ;;
       s) view_solution ;;
-      x) mark_complete "$CURRENT_TOPIC"; echo -e "${GREEN}✓ Done${NC}"; sleep 0.5 ;;
+      x) toggle_complete "$CURRENT_TOPIC"; sleep 0.3 ;;
       c) commit_progress ;;
-      n) navigate next ;;
-      p) navigate prev ;;
+      n) navigate_exercise next ;;
+      p) navigate_exercise prev ;;
+      w) navigate next; CURRENT_EXERCISE=1; save_state ;;
+      b) navigate prev; CURRENT_EXERCISE=1; save_state ;;
       j) jump_section ;;
       l) list_all ;;
       q) echo "Happy learning!"; exit 0 ;;
