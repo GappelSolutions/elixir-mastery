@@ -72,7 +72,7 @@ end
 # Tests
 # =============================================================================
 
-ExUnit.start(auto_run: false)
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.start(autorun: false)
 
 defmodule RecursionTest do
   use ExUnit.Case
@@ -190,4 +190,4 @@ defmodule RecursionTest do
   end
 end
 
-ExUnit.run()
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.run()

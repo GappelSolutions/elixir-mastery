@@ -11,30 +11,27 @@ defmodule Exercise1 do
   # HTTP response with status code and body
   # Return: {:tuple, :reason} or {:map, :reason} etc.
   def http_response do
-    # What's the best structure for {:ok, 200, "body"}?
-    :todo
+    {:tuple, :fixed_size_ordered}
   end
 
   # Configuration options for a function
   def config_options do
-    # Best for [timeout: 5000, retries: 3]?
-    :todo
+    {:map, :dynamic_size_unordered}
   end
 
   # Collection of 10,000 users for lookup by ID
   def user_collection do
-    # Best for frequent lookups?
-    :todo
+    {:map, :dynamic_size_fast_lookup}
   end
 
   # RGB color values (always exactly 3 integers 0-255)
   def rgb_color do
-    :todo
+    {:tuple, :fixed_size_ordered}
   end
 
   # Queue of tasks to process (FIFO)
   def task_queue do
-    :todo
+    {:list, :dynamic_size_ordered}
   end
 end
 
@@ -47,11 +44,11 @@ end
 # - Add a function to check if it's published
 
 defmodule BlogPost do
-  # Define struct with @enforce_keys
+  @enforce_keys [:title, :content, :author_id]
+  defstruct [:title, :content, :author_id, published_at: nil, tags: []]
 
-  def published?(_post) do
-    :todo
-  end
+  def published?(%BlogPost{published_at: date}) when not is_nil(date), do: true
+  def published?(%BlogPost{}), do: false
 end
 
 # =============================================================================
@@ -65,11 +62,12 @@ end
 # - Rest: pixel data
 
 defmodule Exercise3 do
-  def parse(_binary) do
-    # Return: {:ok, %{width: w, height: h, depth: d, pixels: data}}
-    # or {:error, :invalid_format}
-    :todo
+  def parse(<<magic_number::binary-size(3), w::16-big, h::16-big, d::binary-size(1), data>>)
+      when magic_number == "IMG" do
+    {:ok, %{width: w, height: h, depth: d, pixels: data}}
   end
+
+  def parse(), do: {:error, :invalid_format}
 end
 
 # =============================================================================
@@ -101,7 +99,7 @@ end
 # Tests
 # =============================================================================
 
-ExUnit.start(auto_run: false)
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.start(autorun: false)
 
 defmodule DataTypesTest do
   use ExUnit.Case
@@ -124,12 +122,14 @@ defmodule DataTypesTest do
     end
 
     test "published? returns true when published_at is set" do
-      post = struct!(BlogPost, %{
-        title: "Hi",
-        content: "...",
-        author_id: 1,
-        published_at: DateTime.utc_now()
-      })
+      post =
+        struct!(BlogPost, %{
+          title: "Hi",
+          content: "...",
+          author_id: 1,
+          published_at: DateTime.utc_now()
+        })
+
       assert BlogPost.published?(post)
     end
   end
@@ -137,8 +137,9 @@ defmodule DataTypesTest do
   describe "Exercise 3 - Image parser" do
     test "parses valid image header" do
       binary = <<"IMG", 100::16-big, 200::16-big, 24, "pixels">>
+
       assert {:ok, %{width: 100, height: 200, depth: 24, pixels: "pixels"}} =
-        Exercise3.parse(binary)
+               Exercise3.parse(binary)
     end
 
     test "returns error for invalid magic" do
@@ -170,15 +171,15 @@ defmodule DataTypesTest do
 
   describe "Exercise 5 - Query string" do
     test "builds simple query string" do
-      assert Exercise5.to_query_string([name: "Alice"]) == "name=Alice"
+      assert Exercise5.to_query_string(name: "Alice") == "name=Alice"
     end
 
     test "handles multiple params" do
-      assert Exercise5.to_query_string([name: "Alice", age: 30]) == "name=Alice&age=30"
+      assert Exercise5.to_query_string(name: "Alice", age: 30) == "name=Alice&age=30"
     end
 
     test "handles duplicate keys" do
-      result = Exercise5.to_query_string([name: "Alice", name: "Bob"])
+      result = Exercise5.to_query_string(name: "Alice", name: "Bob")
       assert result == "name=Alice&name=Bob"
     end
 
@@ -188,4 +189,4 @@ defmodule DataTypesTest do
   end
 end
 
-ExUnit.run()
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.run()

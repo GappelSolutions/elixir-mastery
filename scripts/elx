@@ -288,10 +288,10 @@ run_tests() {
   # Create a filtered test runner
   local runner="/tmp/elx_test_runner_$$.exs"
   cat > "$runner" << RUNNER
-ExUnit.start(auto_run: true)
+ExUnit.start(autorun: false)
 ExUnit.configure(exclude: [:test], include: [describe: "$describe_name"])
 Code.compile_file("$ex")
-# Tests run automatically via at_exit hook
+ExUnit.run()
 RUNNER
 
   # Run tests with full output
@@ -538,7 +538,6 @@ get_state_mtime() {
 
 main() {
   load_state
-  sync_exercise_to_file  # Sync exercise state on startup
   local last_mtime=$(get_state_mtime)
   local needs_redraw=1
   while true; do

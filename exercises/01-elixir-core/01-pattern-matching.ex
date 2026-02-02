@@ -109,15 +109,18 @@ end
 # Return {:ok, %{type: atom, payload: binary}} or {:error, reason}
 
 defmodule Exercise6 do
-  def parse(<<type_binary::8, payload_length::16, payload::binary-size(payload_length)>>),
-    do: {:ok, %{type: get_type(type_binary), payload: payload}}
+  def parse(<<type_byte::8, payload_length::16, payload::binary-size(payload_length)>>) do
+    with {:ok, type} <- type_to_atom(type_byte) do
+      {:ok, %{type: type, payload: payload}}
+    end
+  end
 
   def parse(_), do: {:error, :invalid_format}
 
-  defp get_type(1), do: :text
-  defp get_type(2), do: :binary
-  defp get_type(3), do: :ping
-  defp get_type(_), do: :invalid_type
+  defp type_to_atom(1), do: {:ok, :text}
+  defp type_to_atom(2), do: {:ok, :binary}
+  defp type_to_atom(3), do: {:ok, :ping}
+  defp type_to_atom(_), do: {:error, :invalid_type}
 end
 
 # =============================================================================
@@ -125,7 +128,7 @@ end
 # =============================================================================
 
 # Start ExUnit if not using external runner
-unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.start(auto_run: false)
+unless System.get_env("ELX_EXTERNAL_RUNNER"), do: ExUnit.start(autorun: false)
 
 defmodule PatternMatchingTest do
   use ExUnit.Case
