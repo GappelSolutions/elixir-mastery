@@ -43,12 +43,12 @@ end
 # - Optional: published_at (default nil), tags (default empty list)
 # - Add a function to check if it's published
 
-defmodule BlogPost do
+defmodule Exercise2 do
   @enforce_keys [:title, :content, :author_id]
   defstruct [:title, :content, :author_id, published_at: nil, tags: []]
 
-  def published?(%BlogPost{published_at: date}) when not is_nil(date), do: true
-  def published?(%BlogPost{}), do: false
+  def published?(%Exercise2{published_at: date}) when not is_nil(date), do: true
+  def published?(%Exercise2{}), do: false
 end
 
 # =============================================================================
@@ -62,12 +62,11 @@ end
 # - Rest: pixel data
 
 defmodule Exercise3 do
-  def parse(<<magic_number::binary-size(3), w::16-big, h::16-big, d::binary-size(1), data>>)
-      when magic_number == "IMG" do
+  def parse(<<"IMG", w::16-big, h::16-big, d::8, data::binary>>) do
     {:ok, %{width: w, height: h, depth: d, pixels: data}}
   end
 
-  def parse(), do: {:error, :invalid_format}
+  def parse(_), do: {:error, :invalid_format}
 end
 
 # =============================================================================
@@ -77,9 +76,14 @@ end
 # deep_merge(%{a: %{b: 1}}, %{a: %{c: 2}}) => %{a: %{b: 1, c: 2}}
 
 defmodule Exercise4 do
-  def deep_merge(_map1, _map2) do
-    :todo
+  def deep_merge(map1, map2) when is_map(map1) and is_map(map2) do
+    Map.merge(map1, map2, &resolve_conflict/3)
   end
+
+  def deep_merge(_map1, _map2), do: {:error, :not_a_map}
+
+  defp resolve_conflict(_key, v1, v2) when is_map(v1) and is_map(v2), do: deep_merge(v1, v2)
+  defp resolve_conflict(_key, _v1, v2), do: v2
 end
 
 # =============================================================================
@@ -90,9 +94,13 @@ end
 # => "name=Alice&age=30&name=Bob"
 
 defmodule Exercise5 do
-  def to_query_string(_opts) do
-    :todo
+  def to_query_string(list) when is_list(list) do
+    list
+    |> Enum.map(fn {k, v} -> "#{k}=#{URI.encode_www_form(to_string(v))}" end)
+    |> Enum.join("&")
   end
+
+  def to_query_string(_), do: {:err, :invalid_format}
 end
 
 # =============================================================================
@@ -107,30 +115,30 @@ defmodule DataTypesTest do
   describe "Exercise 2 - BlogPost struct" do
     test "requires title, content, author_id" do
       assert_raise ArgumentError, fn ->
-        struct!(BlogPost, %{})
+        struct!(Exercise2, %{})
       end
     end
 
     test "has default tags as empty list" do
-      post = struct!(BlogPost, %{title: "Hi", content: "...", author_id: 1})
+      post = struct!(Exercise2, %{title: "Hi", content: "...", author_id: 1})
       assert post.tags == []
     end
 
     test "published? returns false when published_at is nil" do
-      post = struct!(BlogPost, %{title: "Hi", content: "...", author_id: 1})
-      refute BlogPost.published?(post)
+      post = struct!(Exercise2, %{title: "Hi", content: "...", author_id: 1})
+      refute Exercise2.published?(post)
     end
 
     test "published? returns true when published_at is set" do
       post =
-        struct!(BlogPost, %{
+        struct!(Exercise2, %{
           title: "Hi",
           content: "...",
           author_id: 1,
           published_at: DateTime.utc_now()
         })
 
-      assert BlogPost.published?(post)
+      assert Exercise2.published?(post)
     end
   end
 
