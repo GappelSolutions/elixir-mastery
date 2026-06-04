@@ -403,37 +403,7 @@ defmodule Curry do
 end
 ```
 
-### Exercise 3: Memoization
-```elixir
-# Implement a memoized fibonacci using an Agent for cache
-# fib(40) should be fast on repeated calls
-
-defmodule Fib do
-  def start_cache do
-    Agent.start_link(fn -> %{} end, name: :fib_cache)
-  end
-
-  def fib(n) do
-    # Your code here
-    # Check cache, compute if missing, store result
-  end
-end
-```
-
-### Exercise 4: Retry Logic
-```elixir
-# Implement retry/3 that retries a function n times on failure
-# retry(fn -> might_fail() end, 3, 100)
-# Tries up to 3 times, waiting 100ms between attempts
-
-defmodule Retry do
-  def retry(func, attempts, delay_ms) do
-    # Return {:ok, result} or {:error, last_error}
-  end
-end
-```
-
-### Exercise 5: Function Pipeline Builder
+### Exercise 3: Function Pipeline Builder
 ```elixir
 # Build a composable pipeline that can be executed later
 # pipeline = Pipeline.new()

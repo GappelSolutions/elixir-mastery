@@ -193,6 +193,26 @@ defmodule RateCounter do
 end
 ```
 
+### Exercise 3: Memoized Fibonacci
+```elixir
+# Implement a memoized fibonacci using an Agent for cache
+# fib(40) should be fast on repeated calls
+
+defmodule Fib do
+  def start_cache do
+    Agent.start_link(fn -> %{0 => 0, 1 => 1} end, name: :fib_cache)
+  end
+
+  def fib(n) do
+    # Check cache, compute if missing, store result
+  end
+
+  def stop_cache do
+    Agent.stop(:fib_cache)
+  end
+end
+```
+
 ---
 
 ## Agent vs GenServer

@@ -92,7 +92,42 @@ defmodule Exercise4 do
 end
 
 # =============================================================================
-# Exercise 5: Async Cache Loader
+# Exercise 5: Memoized Fibonacci
+# =============================================================================
+# Implement a memoized fibonacci using an Agent for cache
+# fib(40) should be fast on repeated calls
+
+defmodule MemoFib do
+  def start_cache do
+    Agent.start_link(fn -> %{0 => 0, 1 => 1} end, name: :fib_cache)
+  end
+
+  def fib(_n) do
+    # Check cache, compute if missing, store result
+    :todo
+  end
+
+  def stop_cache do
+    Agent.stop(:fib_cache)
+  end
+end
+
+# =============================================================================
+# Exercise 6: Retry Logic
+# =============================================================================
+# Implement retry/3 that retries a function n times on failure
+# retry(fn -> might_fail() end, 3, 100)
+# Tries up to 3 times, waiting 100ms between attempts
+
+defmodule Retry do
+  def retry(_func, _attempts, _delay_ms) do
+    # Return {:ok, result} or {:error, last_error}
+    :todo
+  end
+end
+
+# =============================================================================
+# Exercise 7: Async Cache Loader
 # =============================================================================
 # Cache that loads missing values asynchronously
 # - get(key) returns immediately with :loading or {:ok, value}
@@ -225,7 +260,52 @@ defmodule TaskAgentTest do
     end
   end
 
-  describe "Exercise 5 - Async cache" do
+  describe "Exercise 5 - Memoized Fibonacci" do
+    setup do
+      MemoFib.start_cache()
+      on_exit(fn -> MemoFib.stop_cache() end)
+      :ok
+    end
+
+    test "computes fibonacci correctly" do
+      assert MemoFib.fib(0) == 0
+      assert MemoFib.fib(1) == 1
+      assert MemoFib.fib(10) == 55
+    end
+
+    test "handles larger numbers efficiently" do
+      # Should complete quickly due to memoization
+      assert MemoFib.fib(35) == 9_227_465
+    end
+  end
+
+  describe "Exercise 6 - Retry" do
+    test "returns result on success" do
+      result = Retry.retry(fn -> {:ok, 42} end, 3, 10)
+      assert result == {:ok, 42}
+    end
+
+    test "retries on failure" do
+      # Use process dictionary to track attempts
+      Process.put(:attempt, 0)
+
+      func = fn ->
+        attempt = Process.get(:attempt) + 1
+        Process.put(:attempt, attempt)
+        if attempt < 3, do: {:error, :failed}, else: {:ok, :success}
+      end
+
+      assert Retry.retry(func, 3, 10) == {:ok, :success}
+      assert Process.get(:attempt) == 3
+    end
+
+    test "returns error after all attempts exhausted" do
+      result = Retry.retry(fn -> {:error, :always_fails} end, 3, 10)
+      assert result == {:error, :always_fails}
+    end
+  end
+
+  describe "Exercise 7 - Async cache" do
     setup do
       loader = fn key ->
         Process.sleep(50)

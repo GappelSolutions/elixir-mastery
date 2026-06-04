@@ -8,8 +8,10 @@
 # pipe(5, [&(&1 + 1), &(&1 * 2), &Integer.to_string/1]) => "12"
 
 defmodule Exercise1 do
-  def pipe(_value, _functions) do
-    :todo
+  def pipe(value, []), do: value
+
+  def pipe(value, [head | tail]) do
+    pipe(head.(value), tail)
   end
 end
 
@@ -22,48 +24,17 @@ end
 # curried.(1).(2) => 3
 
 defmodule Exercise2 do
-  def curry(_func) do
-    :todo
+  def curry(func) do
+    fn a ->
+      fn b ->
+        func.(a, b)
+      end
+    end
   end
 end
 
 # =============================================================================
-# Exercise 3: Memoization
-# =============================================================================
-# Implement a memoized fibonacci using an Agent for cache
-# fib(40) should be fast on repeated calls
-
-defmodule Exercise3 do
-  def start_cache do
-    Agent.start_link(fn -> %{0 => 0, 1 => 1} end, name: :fib_cache)
-  end
-
-  def fib(_n) do
-    # Check cache, compute if missing, store result
-    :todo
-  end
-
-  def stop_cache do
-    Agent.stop(:fib_cache)
-  end
-end
-
-# =============================================================================
-# Exercise 4: Retry Logic
-# =============================================================================
-# Implement retry/3 that retries a function n times on failure
-# retry(fn -> might_fail() end, 3, 100)
-# Tries up to 3 times, waiting 100ms between attempts
-
-defmodule Exercise4 do
-  def retry(_func, _attempts, _delay_ms) do
-    # Return {:ok, result} or {:error, last_error}
-    :todo
-  end
-end
-
-# =============================================================================
-# Exercise 5: Pipeline Builder
+# Exercise 3: Pipeline Builder
 # =============================================================================
 # Build a composable pipeline that can be executed later
 # pipeline = Pipeline.new()
@@ -71,10 +42,10 @@ end
 #   |> Pipeline.add(&String.upcase/1)
 # Pipeline.run(pipeline, "  hello  ") => "HELLO"
 
-defmodule Pipeline do
+defmodule Exercise3 do
   defstruct functions: []
 
-  def new, do: %Pipeline{}
+  def new, do: %Exercise3{}
 
   def add(_pipeline, _func) do
     :todo
@@ -124,63 +95,19 @@ defmodule FunctionsTest do
     end
   end
 
-  describe "Exercise 3 - memoized fib" do
-    setup do
-      Exercise3.start_cache()
-      on_exit(fn -> Exercise3.stop_cache() end)
-      :ok
-    end
-
-    test "computes fibonacci correctly" do
-      assert Exercise3.fib(0) == 0
-      assert Exercise3.fib(1) == 1
-      assert Exercise3.fib(10) == 55
-    end
-
-    test "handles larger numbers efficiently" do
-      # Should complete quickly due to memoization
-      assert Exercise3.fib(35) == 9_227_465
-    end
-  end
-
-  describe "Exercise 4 - retry" do
-    test "returns result on success" do
-      result = Exercise4.retry(fn -> {:ok, 42} end, 3, 10)
-      assert result == {:ok, 42}
-    end
-
-    test "retries on failure" do
-      # Use process dictionary to track attempts
-      Process.put(:attempt, 0)
-      func = fn ->
-        attempt = Process.get(:attempt) + 1
-        Process.put(:attempt, attempt)
-        if attempt < 3, do: {:error, :failed}, else: {:ok, :success}
-      end
-
-      assert Exercise4.retry(func, 3, 10) == {:ok, :success}
-      assert Process.get(:attempt) == 3
-    end
-
-    test "returns error after all attempts exhausted" do
-      result = Exercise4.retry(fn -> {:error, :always_fails} end, 3, 10)
-      assert result == {:error, :always_fails}
-    end
-  end
-
-  describe "Exercise 5 - Pipeline" do
+  describe "Exercise 3 - Pipeline" do
     test "builds and runs pipeline" do
       result =
-        Pipeline.new()
-        |> Pipeline.add(&String.trim/1)
-        |> Pipeline.add(&String.upcase/1)
-        |> Pipeline.run("  hello  ")
+        Exercise3.new()
+        |> Exercise3.add(&String.trim/1)
+        |> Exercise3.add(&String.upcase/1)
+        |> Exercise3.run("  hello  ")
 
       assert result == "HELLO"
     end
 
     test "empty pipeline returns input" do
-      assert Pipeline.run(Pipeline.new(), "test") == "test"
+      assert Exercise3.run(Exercise3.new(), "test") == "test"
     end
   end
 end
